@@ -1,0 +1,19 @@
+
+{
+  "manifest_version": 3,
+  "name": "IRCTC Tatkal Helper",
+  "version": "1.0",
+  "description": "Autofill Tatkal booking form on IRCTC",
+  "permissions": ["storage", "scripting", "activeTab"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.irctc.co.in/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IRCTC Tatkal Helper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <form id="tatkalForm">
+    <h1>IRCTC Tatkal Helper</h1>
+
+    <div class="action-buttons">
+      <button type="button" id="save" class="btn save">SAVE DATA</button>
+      <button type="button" id="load" class="btn load">LOAD DATA</button>
+      <button type="button" id="clear" class="btn clear">CLEAR DATA</button>
+      <button type="button" id="connect" class="btn connect">CONNECT</button>
+    </div>
+    
+    <section>
+      <h2>IRCTC credentials</h2>
+      <input type="text" name="username" placeholder="IRCTC Login username" required>
+      <input type="password" name="password" placeholder="IRCTC Login password" required>
+    </section>
+
+    <section>
+      <h2>Set configuration</h2>
+      <label><input type="checkbox" name="tatkal_timing"> Book ticket at tatkal timings (10:00am or 11:00am)</label>
+      <div class="info-text">Only applicable if tatkal quota is selected</div>
+    </section>
+
+    <section>
+      <h2>Journey details</h2>
+      <div class="journey-row">
+        <div class="field-group">
+          <label for="from">From station</label>
+          <input type="text" name="from" id="from" placeholder="Search station" required>
+        </div>
+        <div class="field-group">
+          <label for="to">Destination station</label>
+          <input type="text" name="to" id="to" placeholder="Search station" required>
+        </div>
+      </div>
+      <div class="journey-row">
+        <div class="field-group">
+          <label for="date">Journey date</label>
+          <input type="date" name="date" id="date" required>
+        </div>
+        <div class="field-group">
+          <label for="train">Train number</label>
+          <input type="text" name="train" id="train" placeholder="5-digit Train number" pattern="[0-9]{5}" required>
+        </div>
+      </div>
+      <div class="journey-row">
+        <div class="field-group">
+          <label for="class">Journey class</label>
+          <select name="class" id="class" required>
+            <!-- <option value="">Select class</option> -->
+            <option value="All Classes">All Classes</option>
+            <option value="Sleeper (SL)">Sleeper (SL)</option>
+            <option value="AC 3 Tier (3A)">AC 3 Tier (3A)</option>
+            <!-- <option value="2A">AC 2 Tier (2A)</option>
+            <option value="1A">AC First Class (1A)</option>
+            <option value="CC">AC Chair Car (CC)</option>
+            <option value="2S">Second Sitting (2S)</option> -->
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="quota">Quota</label>
+          <select name="quota" id="quota" required>
+            <option value="TATKAL">TATKAL</option>
+            <option value="GENERAL">General Quota</option>
+            <option value="LD">Ladies Quota</option>
+            <option value="PT">Premium Tatkal</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Add Passenger details</h2>
+      <div class="passenger-details">
+        <!-- Passenger 1 -->
+        <div class="passenger">
+          <div class="field-column">
+            <label for="p1_name">Passenger #1 name</label>
+            <input type="text" name="p1_name" id="p1_name" required>
+          </div>
+          <div class="field-column small">
+            <label for="p1_age">Age</label>
+            <input type="number" name="p1_age" id="p1_age" min="1" max="120" required>
+          </div>
+          <div class="field-column">
+            <label for="p1_gender">Gender</label>
+            <select name="p1_gender" id="p1_gender" required>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p1_berth">Berth Preference</label>
+            <select name="p1_berth" id="p1_berth">
+              <option value="No Preference">No Preference</option>
+              <option value="Lower">Lower</option>
+              <option value="Middle">Middle</option>
+              <option value="Upper">Upper</option>
+              <option value="Side Lower">Side Lower</option>
+              <option value="Side Upper">Side Upper</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p1_nationality">Nationality</label>
+            <select name="p1_nationality" id="p1_nationality" required>
+              <option value="India">India</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Passenger 2 -->
+        <div class="passenger">
+          <div class="field-column">
+            <label for="p2_name">Passenger #2 name</label>
+            <input type="text" name="p2_name" id="p2_name">
+          </div>
+          <div class="field-column small">
+            <label for="p2_age">Age</label>
+            <input type="number" name="p2_age" id="p2_age" min="1" max="120">
+          </div>
+          <div class="field-column">
+            <label for="p2_gender">Gender</label>
+            <select name="p2_gender" id="p2_gender">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p2_berth">Berth Preference</label>
+            <select name="p2_berth" id="p2_berth">
+              <option value="No Preference">No Preference</option>
+              <option value="Lower">Lower</option>
+              <option value="Middle">Middle</option>
+              <option value="Upper">Upper</option>
+              <option value="Side Lower">Side Lower</option>
+              <option value="Side Upper">Side Upper</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p2_nationality">Nationality</label>
+            <select name="p2_nationality" id="p2_nationality">
+              <option value="India">India</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Passenger 3 -->
+        <div class="passenger">
+          <div class="field-column">
+            <label for="p3_name">Passenger #3 name</label>
+            <input type="text" name="p3_name" id="p3_name">
+          </div>
+          <div class="field-column small">
+            <label for="p3_age">Age</label>
+            <input type="number" name="p3_age" id="p3_age" min="1" max="120">
+          </div>
+          <div class="field-column">
+            <label for="p3_gender">Gender</label>
+            <select name="p3_gender" id="p3_gender">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p3_berth">Berth Preference</label>
+            <select name="p3_berth" id="p3_berth">
+              <option value="No Preference">No Preference</option>
+              <option value="Lower">Lower</option>
+              <option value="Middle">Middle</option>
+              <option value="Upper">Upper</option>
+              <option value="Side Lower">Side Lower</option>
+              <option value="Side Upper">Side Upper</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p3_nationality">Nationality</label>
+            <select name="p3_nationality" id="p3_nationality">
+              <option value="India">India</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Passenger 4 -->
+        <div class="passenger">
+          <div class="field-column">
+            <label for="p4_name">Passenger #4 name</label>
+            <input type="text" name="p4_name" id="p4_name">
+          </div>
+          <div class="field-column small">
+            <label for="p4_age">Age</label>
+            <input type="number" name="p4_age" id="p4_age" min="1" max="120">
+          </div>
+          <div class="field-column">
+            <label for="p4_gender">Gender</label>
+            <select name="p4_gender" id="p4_gender">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p4_berth">Berth Preference</label>
+            <select name="p4_berth" id="p4_berth">
+              <option value="No Preference">No Preference</option>
+              <option value="Lower">Lower</option>
+              <option value="Middle">Middle</option>
+              <option value="Upper">Upper</option>
+              <option value="Side Lower">Side Lower</option>
+              <option value="Side Upper">Side Upper</option>
+            </select>
+          </div>
+          <div class="field-column">
+            <label for="p4_nationality">Nationality</label>
+            <select name="p4_nationality" id="p4_nationality">
+              <option value="India">India</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Contact details</h2>
+      <div class="field-row">
+        <div class="field-group">
+          <label for="mobile">Mobile number</label>
+          <input type="tel" name="mobile" id="mobile" placeholder="Mobile number" pattern="[0-9]{10}" required>
+        </div>
+        <div class="field-group">
+          <label for="email">Email</label>
+          <input type="email" name="email" id="email" placeholder="Email" required>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Other Preferences</h2>
+      <div class="checkbox-group">
+        <label><input type="checkbox" name="auto_upgrade"> Consider for Auto Upgradation</label>
+        <label><input type="checkbox" name="confirm_only"> Book only if confirm berths are allotted.</label>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label for="reservation_choice">Reservation Choice</label>
+          <select name="reservation_choice" id="reservation_choice">
+            <option value="">Reservation Choice</option>
+            <option value="BOOK_IF_CONFIRM">Book only if confirm</option>
+            <option value="BOOK_IF_RAC">Book only if RAC/Confirm</option>
+            <option value="BOOK_ANYWAY">Book in any case</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="coach">Preferred Coach No.</label>
+          <input type="text" name="coach" id="coach" placeholder="Preferred Coach No.">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Travel Insurance</h2>
+      <div class="radio-group">
+        <label><input type="radio" name="insurance" value="yes" checked> Yes, and I accept the travel insurance</label>
+        <label><input type="radio" name="insurance" value="no" > No, I don't want travel insurance</label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Payment Type</h2>
+      <div class="info-text">Convenience fee is charged by IRCTC platform. We don't charge anything from user.</div>
+      <div class="radio-group">
+        <label>
+          <input type="radio" name="payment" value="card" > 
+          Pay through Credit & Debit Cards / Net Banking / Wallets / Bharat QR / Pay on Delivery/ Rewards and Others
+          <div class="fee-text">Convenience Fee: ₹15/- + GST</div>
+        </label>
+        <label>
+          <input type="radio" name="payment" value="upi" checked> 
+          Pay through BHIM/UPI
+          <div class="fee-text">Convenience Fee: ₹10/- + GST</div>
+        </label>
+      </div>
+    </section>
+
+    <div class="tatkal-info">For tatkal bookings, click CONNECT button 20secs before 10:00am / 11:00am</div>
+  </form>
+
+  <script src="popup.js"></script>
+</body>
+</html>
