@@ -36,7 +36,7 @@ window.addEventListener("urlchange", () => {
     console.log("IRCTC Tatkal Helper: URL changed");
     setTimeout(() => {
       autofillForm();
-    }, 1000); // Slight delay to allow new DOM to load
+    }, 2000); // Slight delay to allow new DOM to load
   }
 });
 
@@ -318,7 +318,7 @@ async function selectTrain(data) {
       const availabilityTable = await waitForElementWithin(
         card,
         ".ui-tabmenu-nav",
-        8000
+        80000
       );
       if (!availabilityTable) {
         console.warn("IRCTC Tatkal Helper: Availability table not found");
@@ -363,7 +363,7 @@ async function selectTrain(data) {
       }
 
       // Wait for and click "Book Now" button
-      const bookBtn = await waitForElementWithin(card, "button", 8000, (el) =>
+      const bookBtn = await waitForElementWithin(card, "button", 80000, (el) =>
         el.innerText.includes("Book Now")
       );
 
@@ -537,7 +537,7 @@ async function fillPassengerDetails(data) {
   // }
 
   // Handle preferences
-  await handlePreferences(data);
+  // await handlePreferences(data);
 
   // Handle insurance
   // await handleInsurance(data);
