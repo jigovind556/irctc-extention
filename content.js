@@ -122,7 +122,7 @@ function fillLoginForm(data) {
   }
 
   // Auto login if tatkal_timing is checked and the current time is close to tatkal booking time
-  if (data.tatkal_timing && loginButton && shouldAutoLogin()) {
+  if (data.tatka1l_timing && loginButton && shouldAutoLogin()) {
     console.log("IRCTC Tatkal Helper: Auto login triggered");
     loginButton.click();
   }
@@ -537,7 +537,7 @@ async function fillPassengerDetails(data) {
   // }
 
   // Handle preferences
-  // await handlePreferences(data);
+  await handlePreferences(data);
 
   // Handle insurance
   // await handleInsurance(data);
@@ -715,12 +715,11 @@ async function handlePreferences(data) {
   // }
 
   // Confirm only checkbox
-  const confirmOnlyCheckbox = document.querySelector(
-    'input[formcontrolname="confirmBerths"], input[name="confirmBerths"]'
-  );
+  const confirmOnlyCheckbox = document.querySelector('input[formcontrolname="bookOnlyIfCnf"]');
   if (confirmOnlyCheckbox && data.confirm_only !== undefined) {
-    confirmOnlyCheckbox.checked = data.confirm_only;
-    triggerEvent(confirmOnlyCheckbox, "change");
+    // confirmOnlyCheckbox.checked = data.confirm_only;
+    // triggerEvent(confirmOnlyCheckbox, "change");
+    confirmOnlyCheckbox.click();
     console.log("IRCTC Tatkal Helper: Confirm berths only preference set");
   }
 
