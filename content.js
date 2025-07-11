@@ -1,16 +1,7 @@
 let shouldAutoFill = false;
+let lastUrl = location.href;
 
-// Listen for messages from the popup
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-  if (message.action === "connect") {
-    shouldAutoFill = true;
-    console.log("IRCTC Tatkal Helper: Connect triggered");
-
-    autofillForm(); // Initial autofill
-  }
-});
-
-// Detect URL changes by monkey-patching pushState and replaceState
+// Monkey patch to detect URL change via pushState/replaceState
 (function () {
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
@@ -30,17 +21,39 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   });
 })();
 
-// Trigger autofillForm on URL change, if connect was triggered
-window.addEventListener("urlchange", () => {
-  if (shouldAutoFill) {
-    console.log("IRCTC Tatkal Helper: URL changed");
-    setTimeout(() => {
-      autofillForm();
-    }, 2000); // Slight delay to allow new DOM to load
+// Mutation observer to catch route changes in SPAs
+const observer = new MutationObserver(() => {
+  const currentUrl = location.href;
+  if (currentUrl !== lastUrl) {
+    lastUrl = currentUrl;
+    window.dispatchEvent(new Event("urlchange"));
   }
 });
 
-// On content script load, optionally auto-connect
+// Observe changes in the document
+observer.observe(document, {
+  subtree: true,
+  childList: true,
+});
+
+// Listen for connect message from popup
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+  if (message.action === "connect") {
+    shouldAutoFill = true;
+    console.log("IRCTC Tatkal Helper: Connect triggered");
+    autofillForm();
+  }
+});
+
+// URL change listener
+window.addEventListener("urlchange", () => {
+  if (shouldAutoFill) {
+    console.log("IRCTC Tatkal Helper: Detected URL change");
+    setTimeout(autofillForm, 2000); // Delay for new DOM to render
+  }
+});
+
+// Auto-connect if flag is set
 chrome.storage.local.get("autoConnect", function (data) {
   if (data.autoConnect) {
     chrome.storage.local.remove("autoConnect");
@@ -257,7 +270,7 @@ async function fillBookingForm(data) {
 
   // Trigger Search button
   const searchButton = document.querySelector('button[type="submit"]');
-  if (searchButton && data.tatkal_timing && shouldAutoSearch()) {
+  if (searchButton && shouldAutoSearch()) {
     console.log("Auto search triggered");
     searchButton.click();
   }
@@ -549,7 +562,7 @@ async function fillPassengerDetails(data) {
   const continueButton = document.querySelector(
     'button[type="submit"], button.btn-primary'
   );
-  if (data.tatkal_timing && continueButton && shouldAutoSubmit()) {
+  if ( continueButton && shouldAutoSubmit()) {
     console.log("IRCTC Tatkal Helper: Auto submit passenger details");
     continueButton.click();
   }
@@ -715,7 +728,9 @@ async function handlePreferences(data) {
   // }
 
   // Confirm only checkbox
-  const confirmOnlyCheckbox = document.querySelector('input[formcontrolname="bookOnlyIfCnf"]');
+  const confirmOnlyCheckbox = document.querySelector(
+    'input[formcontrolname="bookOnlyIfCnf"]'
+  );
   if (confirmOnlyCheckbox && data.confirm_only !== undefined) {
     // confirmOnlyCheckbox.checked = data.confirm_only;
     // triggerEvent(confirmOnlyCheckbox, "change");
@@ -776,7 +791,7 @@ async function selectPaymentOption(data) {
   console.log("IRCTC Tatkal Helper: Attempting to select payment option");
 
   // Wait for payment section to be ready
-  await waitForElement('table', 5000);
+  await waitForElement("table", 5000);
   console.log("IRCTC Tatkal Helper: Payment options found");
 
   if (data.payment === "card") {
@@ -802,7 +817,6 @@ async function selectPaymentOption(data) {
 
   // Wait a moment for payment option to register
   await new Promise((resolve) => setTimeout(resolve, 500));
-
 }
 
 // Helper functions
@@ -864,13 +878,14 @@ function shouldAutoLogin() {
 
   // For AC classes: 10:00 AM (Check 20 seconds before)
   // For Non-AC classes: 11:00 AM (Check 20 seconds before)
-  return (
-    // (hours === 9 && minutes === 59 && seconds >= 40) ||
-    // (hours === 10 && minutes === 0 && seconds <= 15) ||
-    // (hours === 10 && minutes === 59 && seconds >= 40) ||
-    // (hours === 11 && minutes === 0 && seconds <= 15)
-    true // For testing purposes, always return true
-  );
+  // if (data.tatkal_timing)
+    return (
+      // (hours === 9 && minutes === 59 && seconds >= 40) ||
+      // (hours === 10 && minutes === 0 && seconds <= 15) ||
+      // (hours === 10 && minutes === 59 && seconds >= 40) ||
+      // (hours === 11 && minutes === 0 && seconds <= 15)
+      true // For testing purposes, always return true
+    );
 }
 
 function shouldAutoSearch() {
@@ -887,7 +902,6 @@ function shouldAutoContinue() {
   // Similar logic as shouldAutoLogin
   return shouldAutoLogin();
 }
-
 
 async function MakePayment() {
   try {
