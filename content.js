@@ -96,7 +96,7 @@ async function autofillForm() {
       }
       // 4. Check if we're on the payment page
       else if (window.location.href.includes("bkgPaymentOptions")) {
-        await MakePayment();
+        await MakePayment(data);
       } else {
         console.log(
           "IRCTC Tatkal Helper: Current page not recognized for autofill"
@@ -562,7 +562,7 @@ async function fillPassengerDetails(data) {
   const continueButton = document.querySelector(
     'button[type="submit"], button.btn-primary'
   );
-  if ( continueButton && shouldAutoSubmit()) {
+  if (continueButton && shouldAutoSubmit()) {
     console.log("IRCTC Tatkal Helper: Auto submit passenger details");
     continueButton.click();
   }
@@ -879,13 +879,13 @@ function shouldAutoLogin() {
   // For AC classes: 10:00 AM (Check 20 seconds before)
   // For Non-AC classes: 11:00 AM (Check 20 seconds before)
   // if (data.tatkal_timing)
-    return (
-      // (hours === 9 && minutes === 59 && seconds >= 40) ||
-      // (hours === 10 && minutes === 0 && seconds <= 15) ||
-      // (hours === 10 && minutes === 59 && seconds >= 40) ||
-      // (hours === 11 && minutes === 0 && seconds <= 15)
-      true // For testing purposes, always return true
-    );
+  return (
+    // (hours === 9 && minutes === 59 && seconds >= 40) ||
+    // (hours === 10 && minutes === 0 && seconds <= 15) ||
+    // (hours === 10 && minutes === 59 && seconds >= 40) ||
+    // (hours === 11 && minutes === 0 && seconds <= 15)
+    true // For testing purposes, always return true
+  );
 }
 
 function shouldAutoSearch() {
@@ -903,8 +903,37 @@ function shouldAutoContinue() {
   return shouldAutoLogin();
 }
 
-async function MakePayment() {
+async function MakePayment(data) {
   try {
+    if (data.payment === "card") {
+      // Step 1: Select BHIM UPI payment option from sidebar
+      const tabItems = Array.from(
+        document.querySelectorAll('div[tabindex="0"]')
+      );
+      const ewalletTab = tabItems.find((el) =>
+        el.innerHTML.toUpperCase().includes("EWALLET")
+      );
+      if (!ewalletTab) {
+        console.warn("IRCTC Tatkal Helper: ewallet tab not found.");
+        return;
+      }
+
+      ewalletTab.click();
+      console.log("IRCTC Tatkal Helper: WALLET option selected.");
+
+      // Step 2: Wait for Paytm bank option to appear and click it
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const bookNowBut = document.querySelector(".btn-primary");
+
+      if (!bookNowBut) {
+        console.warn("IRCTC Tatkal Helper: Book Now button not found.");
+        return;
+      }
+      bookNowBut.click();
+
+      return;
+    }
     console.log("IRCTC Tatkal Helper: Initiating payment process...");
 
     // Step 1: Select BHIM UPI payment option from sidebar
