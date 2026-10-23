@@ -49,7 +49,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 window.addEventListener("urlchange", () => {
   if (shouldAutoFill) {
     console.log("IRCTC Tatkal Helper: Detected URL change");
-    setTimeout(autofillForm, 2000); // Delay for new DOM to render
+    setTimeout(autofillForm, 100); // Delay for new DOM to render
   }
 });
 
@@ -58,7 +58,9 @@ chrome.storage.local.get("autoConnect", function (data) {
   if (data.autoConnect) {
     chrome.storage.local.remove("autoConnect");
     shouldAutoFill = true;
-    setTimeout(autofillForm, 2000);
+    chrome.storage.local.remove("autoConnect");
+    shouldAutoFill = true;
+    setTimeout(autofillForm, 100);
   }
 });
 
@@ -80,7 +82,7 @@ async function autofillForm() {
 
       // 1. Check if we're on the login page
       if (window.location.href.includes("login")) {
-        fillLoginForm(data);
+        await fillLoginForm(data);
       }
       // 2. Check if we're on the booking page
       else if (window.location.href.includes("train-search")) {
@@ -108,11 +110,11 @@ async function autofillForm() {
   });
 }
 
-function fillLoginForm(data) {
+async function fillLoginForm(data) {
   console.log("IRCTC Tatkal Helper: Attempting to fill login form");
 
   // These selectors need to be updated based on the actual IRCTC login form structure
-  const usernameField = document.querySelector(
+  const usernameField = await waitForElement(
     'input[type="text"][formcontrolname="userid"], input[name="username"]'
   );
   const passwordField = document.querySelector(
@@ -135,7 +137,7 @@ function fillLoginForm(data) {
   }
 
   // Auto login if tatkal_timing is checked and the current time is close to tatkal booking time
-  if (data.tatka1l_timing && loginButton && shouldAutoLogin()) {
+  if (data.tatkal_timing && loginButton && shouldAutoLogin(data)) {
     console.log("IRCTC Tatkal Helper: Auto login triggered");
     loginButton.click();
   }
@@ -217,7 +219,7 @@ async function fillBookingForm(data) {
             clearInterval(interval);
             return reject(false);
           }
-        }, 100);
+        }, 50);
       } catch (error) {
         console.error(
           `IRCTC Tatkal Helper: Error setting dropdown value for ${dropdownSelector}`,
@@ -227,6 +229,9 @@ async function fillBookingForm(data) {
       }
     });
   };
+
+  // Wait for the form to be ready
+  await waitForElement('p-autocomplete[formcontrolname="origin"] input');
 
   // Fill "From" Station
   if (data.from) {
@@ -270,7 +275,7 @@ async function fillBookingForm(data) {
 
   // Trigger Search button
   const searchButton = document.querySelector('button[type="submit"]');
-  if (searchButton && shouldAutoSearch()) {
+  if (searchButton && shouldAutoSearch(data)) {
     console.log("Auto search triggered");
     searchButton.click();
   }
@@ -399,7 +404,7 @@ function waitForElementWithin(
   filterFn = null
 ) {
   return new Promise((resolve) => {
-    const interval = 100;
+    const interval = 30;
     const maxAttempts = timeout / interval;
     let attempts = 0;
 
@@ -408,8 +413,8 @@ function waitForElementWithin(
       const target = filterFn
         ? [...elements].find(filterFn)
         : elements.length > 0
-        ? elements[0]
-        : null;
+          ? elements[0]
+          : null;
       console.log(
         `IRCTC Tatkal Helper: Checking for element ${selector}, found: ${elements.length}`
       );
@@ -437,7 +442,7 @@ function waitForElement(selector, timeout = 5000) {
     }
 
     // If not, set up observer and wait for it
-    const interval = 100;
+    const interval = 30;
     const maxAttempts = timeout / interval;
     let attempts = 0;
 
@@ -562,7 +567,7 @@ async function fillPassengerDetails(data) {
   const continueButton = document.querySelector(
     'button[type="submit"], button.btn-primary'
   );
-  if (continueButton && shouldAutoSubmit()) {
+  if (continueButton && shouldAutoSubmit(data)) {
     console.log("IRCTC Tatkal Helper: Auto submit passenger details");
     continueButton.click();
   }
@@ -592,7 +597,7 @@ async function fillSinglePassenger(
   const passengerForm = passengerForms[formIndex];
 
   // Get the form fields for this passenger
-  const nameField = passengerForm.querySelector('input[placeholder="Name"]');
+  const nameField = passengerForm.querySelector('input[placeholder="Full Name as per Govt. ID"]');
   const ageField = passengerForm.querySelector(
     'input[formcontrolname="passengerAge"]'
   );
@@ -869,38 +874,64 @@ function triggerEvent(element, eventType) {
   element.dispatchEvent(event);
 }
 
-function shouldAutoLogin() {
-  // Logic to determine if auto login should be triggered based on tatkal timing
+// Check if we are within the valid time window for Tatkal booking
+function checkTime(data) {
+  if (!data.tatkal_timing) return true;
+
   const now = new Date();
   const hours = now.getHours();
   const minutes = now.getMinutes();
   const seconds = now.getSeconds();
 
-  // For AC classes: 10:00 AM (Check 20 seconds before)
-  // For Non-AC classes: 11:00 AM (Check 20 seconds before)
-  // if (data.tatkal_timing)
-  return (
-    // (hours === 9 && minutes === 59 && seconds >= 40) ||
-    // (hours === 10 && minutes === 0 && seconds <= 15) ||
-    // (hours === 10 && minutes === 59 && seconds >= 40) ||
-    // (hours === 11 && minutes === 0 && seconds <= 15)
-    true // For testing purposes, always return true
+  // Determine target starting hour
+  // AC Classes: 10:00 AM
+  // Non-AC (Sleeper/2S): 11:00 AM
+  const acClasses = [
+    "AC 3 Economy (3E)",
+    "AC 3 Tier (3A)",
+    "AC 2 Tier (2A)",
+    "AC Chair car (CC)",
+    "AC First Class (1A)", // Assuming 1A is possible in future
+    "Executive Chair Car (EC)",
+  ];
+
+  const isAC = acClasses.some(
+    (c) => data.class.includes(c) || c.includes(data.class)
   );
+  const targetHour = isAC ? 10 : 11;
+
+  // We allow the script to run starting from 1 minute before the target time
+  // This allows for login and navigation time.
+  // e.g., 9:59:00 for 10:00 AM booking
+
+  // Safe window: [TargetHour-1 : 58 : 00] to [TargetHour : 15 : 00]
+  // This gives a ~17 minute window.
+
+  if (hours === targetHour - 1) {
+    return minutes >= 58; // Start allowing actions from 9:58 or 10:58
+  }
+
+  if (hours === targetHour) {
+    return minutes < 15; // Stop auto-actions after 15 minutes past the hour
+  }
+
+  return false;
 }
 
-function shouldAutoSearch() {
-  // Similar logic as shouldAutoLogin
-  return shouldAutoLogin();
+function shouldAutoLogin(data) {
+  return checkTime(data);
 }
 
-function shouldAutoSubmit() {
-  // Similar logic as shouldAutoLogin
-  return shouldAutoLogin();
+function shouldAutoSearch(data) {
+  return checkTime(data);
 }
 
-function shouldAutoContinue() {
-  // Similar logic as shouldAutoLogin
-  return shouldAutoLogin();
+function shouldAutoSubmit(data) {
+  return checkTime(data);
+}
+
+function shouldAutoContinue(data) {
+  return checkTime(data);
 }
 
 async function MakePayment(data) {
