@@ -1,3 +1,130 @@
+// ==================== TATKAL / SCHEDULED TIMING CONFIGURATION ====================
+// Define exact target booking times for:
+// 1. AC Tatkal tickets (opens at 10:00:00 AM)
+// 2. Sleeper / Non-AC Tatkal tickets (opens at 11:00:00 AM)
+// 3. General tickets (used for testing or booking general tickets at any specified time)
+// Modify these values (hours, minutes, seconds) to test and verify that the trigger fires at your exact specified time.
+const TATKAL_CONFIG = {
+  // General ticket scheduled time (modify hours, minutes, seconds to test anytime)
+  GENERAL: {
+    hours: 10,
+    minutes: 46,
+    seconds: 0,
+  },
+  // Automatically enable scheduled run for General quota even if checkbox in popup was unchecked
+  enableForGeneral: true,
+
+  // AC classes open at 10:00:00 AM (Tatkal)
+  AC: {
+    hours: 10,
+    minutes: 0,
+    seconds: 0,
+  },
+  // Non-AC / Sleeper classes open at 11:00:00 AM (Tatkal)
+  SLEEPER: {
+    hours: 11,
+    minutes: 0,
+    seconds: 0,
+  },
+  // Active window in minutes during which actions remain valid after target time
+  activeWindowMinutes: 15,
+};
+// =====================================================================
+
+const AC_CLASSES = [
+  "AC 3 Economy (3E)",
+  "AC 3 Tier (3A)",
+  "AC 2 Tier (2A)",
+  "AC Chair car (CC)",
+  "AC First Class (1A)",
+  "Executive Chair Car (EC)",
+  "3E",
+  "3A",
+  "2A",
+  "1A",
+  "CC",
+  "EC",
+];
+
+function isAcClass(className) {
+  if (!className) return false;
+  const upper = className.toUpperCase();
+  return AC_CLASSES.some((c) => upper.includes(c.toUpperCase()));
+}
+
+function isScheduledTimingEnabled(data) {
+  if (!data) return false;
+  const isGeneral = data.quota === "GENERAL" || data.quota === "GN";
+  if (isGeneral && TATKAL_CONFIG.enableForGeneral) {
+    return true;
+  }
+  return Boolean(data.tatkal_timing);
+}
+
+function getTargetTatkalTime(data) {
+  const isGeneral = data?.quota === "GENERAL" || data?.quota === "GN";
+  if (isGeneral && TATKAL_CONFIG.GENERAL) {
+    const cfg = TATKAL_CONFIG.GENERAL;
+    const target = new Date();
+    target.setHours(cfg.hours, cfg.minutes, cfg.seconds, 0);
+    return target;
+  }
+
+  const isAC = isAcClass(data?.class);
+  const cfg = isAC ? TATKAL_CONFIG.AC : TATKAL_CONFIG.SLEEPER;
+  const target = new Date();
+  target.setHours(cfg.hours, cfg.minutes, cfg.seconds, 0);
+  return target;
+}
+
+function isBeforeTargetTime(targetTime) {
+  return Date.now() < targetTime.getTime();
+}
+
+async function waitUntilTargetTime(targetTime) {
+  const diff = targetTime.getTime() - Date.now();
+  if (diff <= 0) {
+    console.log(
+      `IRCTC Tatkal Helper: Target time ${targetTime.toLocaleTimeString()} already reached. Proceeding immediately.`
+    );
+    return;
+  }
+
+  const targetStr = `${targetTime.toLocaleTimeString()}.${String(targetTime.getMilliseconds()).padStart(3, "0")}`;
+  console.log(
+    `IRCTC Tatkal Helper: [TIMER ARMED] Waiting for exact Tatkal trigger at ${targetStr} (~${(diff / 1000).toFixed(1)}s remaining)`
+  );
+
+  return new Promise((resolve) => {
+    // Log countdown once per second if waiting > 1 second
+    let countdownInterval = null;
+    if (diff > 1000) {
+      countdownInterval = setInterval(() => {
+        const remainingMs = targetTime.getTime() - Date.now();
+        if (remainingMs <= 1000) {
+          clearInterval(countdownInterval);
+        } else {
+          console.log(
+            `IRCTC Tatkal Helper: [COUNTDOWN] ${(remainingMs / 1000).toFixed(0)}s until Tatkal auto-trigger (${targetStr})`
+          );
+        }
+      }, 1000);
+    }
+
+    const waitMs = targetTime.getTime() - Date.now();
+    setTimeout(() => {
+      if (countdownInterval) clearInterval(countdownInterval);
+      const now = new Date();
+      const firedAt = `${now.toLocaleTimeString()}.${String(now.getMilliseconds()).padStart(3, "0")}`;
+      console.log(
+        `%cIRCTC Tatkal Helper: [EXACT TIME TRIGGERED] Fired at ${firedAt} (Target: ${targetStr})!`,
+        "color: #00ff00; font-weight: bold; font-size: 14px;"
+      );
+      resolve();
+    }, Math.max(0, waitMs));
+  });
+}
+
 let shouldAutoFill = false;
 let lastUrl = location.href;
 let isAutofilling = false;
@@ -91,6 +218,20 @@ async function autofillForm() {
 
     console.log("IRCTC Tatkal Helper: Retrieved data for autofill", data);
 
+    if (isScheduledTimingEnabled(data)) {
+      const targetTime = getTargetTatkalTime(data);
+      const isGeneral = data.quota === "GENERAL" || data.quota === "GN";
+      const quotaType = isGeneral
+        ? "GENERAL Ticket"
+        : isAcClass(data.class)
+          ? "AC Tatkal"
+          : "Sleeper Tatkal";
+      const targetStr = `${targetTime.toLocaleTimeString()}.${String(targetTime.getMilliseconds()).padStart(3, "0")}`;
+      console.log(
+        `IRCTC Tatkal Helper: Scheduled run enabled for [${quotaType}]. Configured target time: ${targetStr}`
+      );
+    }
+
     try {
       // The autofill logic will depend on the current page URL and structure
 
@@ -159,8 +300,8 @@ async function fillLoginForm(data) {
     console.log("IRCTC Tatkal Helper: Password filled");
   }
 
-  // Auto login if tatkal_timing is checked and the current time is close to tatkal booking time
-  if (data.tatkal_timing && loginButton && shouldAutoLogin(data)) {
+  // Auto login if scheduled timing is enabled and the current time is close to booking time
+  if (isScheduledTimingEnabled(data) && loginButton && shouldAutoLogin(data)) {
     console.log("IRCTC Tatkal Helper: Auto login triggered");
     loginButton.click();
   }
@@ -291,14 +432,35 @@ async function fillBookingForm(data) {
 
   // Trigger Search button
   const searchButton = document.querySelector('button[type="submit"]');
-  if (searchButton && shouldAutoSearch(data)) {
-    console.log("Auto search triggered");
-    searchButton.click();
+  if (searchButton) {
+    if (isScheduledTimingEnabled(data)) {
+      const targetTime = getTargetTatkalTime(data);
+      if (isBeforeTargetTime(targetTime)) {
+        console.log(
+          "IRCTC Tatkal Helper: On train-search page. All details filled. Waiting for exact scheduled time..."
+        );
+        await waitUntilTargetTime(targetTime);
+      }
+    }
+
+    if (shouldAutoSearch(data)) {
+      console.log("IRCTC Tatkal Helper: Auto search triggered");
+      searchButton.click();
+    }
   }
 }
 
 async function selectTrain(data) {
-  // document.querySelectorAll("p-tabmenu .hidden-x")[0].innerText;
+  if (isScheduledTimingEnabled(data)) {
+    const targetTime = getTargetTatkalTime(data);
+    if (isBeforeTargetTime(targetTime)) {
+      console.log(
+        "IRCTC Tatkal Helper: On train-list page. Waiting for exact scheduled time before booking..."
+      );
+      await waitUntilTargetTime(targetTime);
+    }
+  }
+
   // Get all train cards
   console.log("IRCTC Tatkal Helper: Attempting to select train");
   const trainCards = document.querySelectorAll("app-train-avl-enq");
@@ -916,46 +1078,19 @@ function triggerEvent(element, eventType) {
   element.dispatchEvent(event);
 }
 
-// Check if we are within the valid time window for Tatkal booking
+// Check if we are within the valid time window for Tatkal / scheduled booking
 function checkTime(data) {
-  if (!data || !data.tatkal_timing) return true;
+  if (!data || !isScheduledTimingEnabled(data)) return true;
 
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
+  const targetTime = getTargetTatkalTime(data);
+  const now = Date.now();
+  const targetMs = targetTime.getTime();
+  const windowMs = (TATKAL_CONFIG.activeWindowMinutes || 15) * 60 * 1000;
 
-  // Determine target starting hour
-  // AC Classes: 10:00 AM
-  // Non-AC (Sleeper/2S): 11:00 AM
-  const acClasses = [
-    "AC 3 Economy (3E)",
-    "AC 3 Tier (3A)",
-    "AC 2 Tier (2A)",
-    "AC Chair car (CC)",
-    "AC First Class (1A)", // Assuming 1A is possible in future
-    "Executive Chair Car (EC)",
-  ];
-
-  const journeyClass = data.class || "";
-  const isAC = acClasses.some(
-    (c) => journeyClass.includes(c) || c.includes(journeyClass)
-  );
-  const targetHour = isAC ? 10 : 11;
-
-  // We allow the script to run starting from 1 minute before the target time
-  // This allows for login and navigation time.
-  // e.g., 9:59:00 for 10:00 AM booking
-
-  // Safe window: [TargetHour-1 : 58 : 00] to [TargetHour : 15 : 00]
-  // This gives a ~17 minute window.
-
-  if (hours === targetHour - 1) {
-    return minutes >= 58; // Start allowing actions from 9:58 or 10:58
-  }
-
-  if (hours === targetHour) {
-    return minutes < 15; // Stop auto-actions after 15 minutes past the hour
+  // We allow preparatory actions (like login) up to 2 minutes before the target time
+  const prepLeadMs = 2 * 60 * 1000;
+  if (now >= targetMs - prepLeadMs && now <= targetMs + windowMs) {
+    return true;
   }
 
   return false;

@@ -30,14 +30,13 @@ function setupEventListeners() {
       const tatkalCheckbox = document.querySelector('input[name="tatkal_timing"]');
       const tatkalInfo = tatkalCheckbox.parentElement.nextElementSibling;
       
+      tatkalCheckbox.disabled = false;
       if (this.value === 'TATKAL' || this.value === 'PT') {
-        tatkalCheckbox.disabled = false;
-        tatkalInfo.style.display = 'block';
+        tatkalInfo.textContent = 'Tatkal auto-trigger active (10:00am AC / 11:00am Sleeper)';
       } else {
-        tatkalCheckbox.disabled = true;
-        tatkalCheckbox.checked = false;
-        tatkalInfo.style.display = 'none';
+        tatkalInfo.textContent = 'Scheduled auto-trigger active (uses GENERAL config)';
       }
+      tatkalInfo.style.display = 'block';
     });
   }
 }
