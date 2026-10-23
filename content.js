@@ -1,5 +1,8 @@
 let shouldAutoFill = false;
 let lastUrl = location.href;
+let isAutofilling = false;
+let currentHandlingUrl = "";
+let urlChangeDebounce = null;
 
 // Monkey patch to detect URL change via pushState/replaceState
 (function () {
@@ -8,15 +11,18 @@ let lastUrl = location.href;
 
   history.pushState = function () {
     originalPushState.apply(this, arguments);
+    lastUrl = location.href;
     window.dispatchEvent(new Event("urlchange"));
   };
 
   history.replaceState = function () {
     originalReplaceState.apply(this, arguments);
+    lastUrl = location.href;
     window.dispatchEvent(new Event("urlchange"));
   };
 
   window.addEventListener("popstate", () => {
+    lastUrl = location.href;
     window.dispatchEvent(new Event("urlchange"));
   });
 })();
@@ -45,11 +51,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   }
 });
 
-// URL change listener
+// URL change listener with debounce
 window.addEventListener("urlchange", () => {
   if (shouldAutoFill) {
     console.log("IRCTC Tatkal Helper: Detected URL change");
-    setTimeout(autofillForm, 100); // Delay for new DOM to render
+    clearTimeout(urlChangeDebounce);
+    urlChangeDebounce = setTimeout(autofillForm, 100); // Delay for new DOM to render
   }
 });
 
@@ -58,20 +65,27 @@ chrome.storage.local.get("autoConnect", function (data) {
   if (data.autoConnect) {
     chrome.storage.local.remove("autoConnect");
     shouldAutoFill = true;
-    chrome.storage.local.remove("autoConnect");
-    shouldAutoFill = true;
     setTimeout(autofillForm, 100);
   }
 });
 
 // Main function to autofill the IRCTC form
 async function autofillForm() {
+  const currentUrl = location.href;
+  if (isAutofilling && currentHandlingUrl === currentUrl) {
+    console.log("IRCTC Tatkal Helper: Autofill already running for this page, skipping duplicate call");
+    return;
+  }
+
+  isAutofilling = true;
+  currentHandlingUrl = currentUrl;
   console.log("IRCTC Tatkal Helper: Starting autofill...");
 
   chrome.storage.local.get("formData", async (result) => {
     const data = result.formData;
     if (!data) {
       console.log("IRCTC Tatkal Helper: No saved data found");
+      isAutofilling = false;
       return;
     }
 
@@ -113,6 +127,8 @@ async function autofillForm() {
       }
     } catch (error) {
       console.error("IRCTC Tatkal Helper: Error during autofill", error);
+    } finally {
+      isAutofilling = false;
     }
   });
 }
@@ -157,16 +173,9 @@ async function fillBookingForm(data) {
     el.dispatchEvent(event);
   };
   const OutsideClick = () => {
-    const outsideClick = document.createElement("div");
-    outsideClick.style.position = "absolute";
-    outsideClick.style.top = "0";
-    outsideClick.style.left = "0";
-    outsideClick.style.width = "1px";
-    outsideClick.style.height = "1px";
-    outsideClick.style.pointerEvents = "none"; // Make it non-interactive
-    document.body.appendChild(outsideClick);
-    outsideClick.click();
-    document.body.removeChild(outsideClick);
+    if (document.activeElement && typeof document.activeElement.blur === "function") {
+      document.activeElement.blur();
+    }
   };
 
   const setInputValue = (selector, value) => {
@@ -200,14 +209,14 @@ async function fillBookingForm(data) {
 
         const interval = setInterval(() => {
           const options = document.querySelectorAll(".ui-dropdown-item");
-          console.log(
-            "IRCTC Tatkal Helper: Checking dropdown options",
-            options.length
-          );
 
+          const targetVal = value.trim().toLowerCase();
           for (let opt of options) {
+            const optText = opt.innerText.trim().toLowerCase();
             if (
-              opt.innerText.trim().toLowerCase() === value.trim().toLowerCase()
+              optText === targetVal ||
+              optText.includes(targetVal) ||
+              targetVal.includes(optText)
             ) {
               opt.click();
               console.log(
@@ -403,6 +412,32 @@ async function selectTrain(data) {
   }
 }
 
+// Utility to wait for any arbitrary condition to become truthy
+function waitForCondition(conditionFn, timeout = 5000, interval = 30) {
+  return new Promise((resolve) => {
+    const maxAttempts = timeout / interval;
+    let attempts = 0;
+
+    const check = () => {
+      try {
+        const result = conditionFn();
+        if (result) {
+          return resolve(result);
+        }
+      } catch (e) {
+        // continue polling
+      }
+
+      if (attempts++ >= maxAttempts) {
+        return resolve(null);
+      }
+      setTimeout(check, interval);
+    };
+
+    check();
+  });
+}
+
 // Utility to wait for a specific element within a container
 function waitForElementWithin(
   container,
@@ -422,13 +457,11 @@ function waitForElementWithin(
         : elements.length > 0
           ? elements[0]
           : null;
-      console.log(
-        `IRCTC Tatkal Helper: Checking for element ${selector}, found: ${elements.length}`
-      );
-      console.log(`IRCTC Tatkal Helper: Target element found: ${target}`);
       if (target) {
+        console.log(`IRCTC Tatkal Helper: Target element ${selector} found within container`);
         resolve(target);
       } else if (attempts++ >= maxAttempts) {
+        console.warn(`IRCTC Tatkal Helper: Target element ${selector} not found within ${timeout}ms`);
         resolve(null);
       } else {
         setTimeout(check, interval);
@@ -481,64 +514,60 @@ async function fillPassengerDetails(data) {
   await waitForElement("app-passenger");
   console.log("IRCTC Tatkal Helper: Passenger form found");
 
-  // Determine how many passengers we need to add
-  let passengerCount = 0;
+  // Collect all passengers to fill from data
+  const passengersToFill = [];
   for (let i = 1; i <= 4; i++) {
     const nameKey = `p${i}_name`;
     if (data[nameKey] && data[nameKey].trim() !== "") {
-      passengerCount++;
+      passengersToFill.push({
+        num: i,
+        name: data[nameKey],
+        age: data[`p${i}_age`],
+        gender: data[`p${i}_gender`],
+        berth: data[`p${i}_berth`],
+        nationality: data[`p${i}_nationality`],
+      });
     }
   }
 
-  console.log(`IRCTC Tatkal Helper: Need to fill ${passengerCount} passengers`);
+  console.log(
+    `IRCTC Tatkal Helper: Need to fill ${passengersToFill.length} passengers`
+  );
 
-  // Fill the first passenger
-  if (data.p1_name && data.p1_name.trim() !== "") {
-    await fillSinglePassenger(
-      1,
-      data.p1_name,
-      data.p1_age,
-      data.p1_gender,
-      data.p1_berth,
-      data.p1_nationality
-    );
-  }
-
-  // Add additional passengers if needed
-  if (passengerCount > 1) {
-    for (let i = 2; i <= passengerCount; i++) {
-      const nameKey = `p${i}_name`;
-      const ageKey = `p${i}_age`;
-      const genderKey = `p${i}_gender`;
-      const berthKey = `p${i}_berth`;
-      const nationalityKey = `p${i}_nationality`;
-
-      if (data[nameKey] && data[nameKey].trim() !== "") {
-        // Click the "Add Passenger" button
+  for (let i = 0; i < passengersToFill.length; i++) {
+    const p = passengersToFill[i];
+    // If we need another passenger form (form index i), click Add Passenger if not already present
+    if (i > 0) {
+      const passengerForms = document.querySelectorAll("app-passenger");
+      if (passengerForms.length <= i) {
         const addPassengerButton = document.querySelector(
-          "a span.prenext:first-child"
+          "a span.prenext:first-child, a.prenext, a[tabindex='0'] span.prenext"
         );
         if (addPassengerButton) {
-          console.log(`IRCTC Tatkal Helper: Adding passenger #${i}`);
+          console.log(`IRCTC Tatkal Helper: Adding passenger form #${i + 1}`);
           addPassengerButton.click();
 
-          // Wait for the new passenger form to be added
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          // Fill the new passenger's details
-          await fillSinglePassenger(
-            i,
-            data[nameKey],
-            data[ageKey],
-            data[genderKey],
-            data[berthKey],
-            data[nationalityKey]
+          // Wait dynamically for the new passenger form to be added (fast polling)
+          await waitForCondition(
+            () => document.querySelectorAll("app-passenger").length > i,
+            3000,
+            30
           );
         } else {
           console.warn("IRCTC Tatkal Helper: Add Passenger button not found");
         }
       }
     }
+
+    // Fill passenger form at index i (1-based index is i + 1)
+    await fillSinglePassenger(
+      i + 1,
+      p.name,
+      p.age,
+      p.gender,
+      p.berth,
+      p.nationality
+    );
   }
 
   // Fill contact details
@@ -812,23 +841,29 @@ async function selectPaymentOption(data) {
   } else if (data.payment === "upi") {
     // Try finding by role and content
     const radioButtons = document.querySelectorAll('div[role="radio"]');
+    let foundUPI = false;
     for (const button of radioButtons) {
+      const label = button.closest("label");
       if (
-        button.closest("label").textContent.includes("BHIM") ||
-        button.closest("label").textContent.includes("UPI")
+        label &&
+        (label.textContent.includes("BHIM") || label.textContent.includes("UPI"))
       ) {
         console.log("IRCTC Tatkal Helper: Clicking UPI payment by role");
         button.click();
+        foundUPI = true;
         break;
       }
     }
-    console.warn("IRCTC Tatkal Helper: UPI payment option not found");
 
-    console.log("IRCTC Tatkal Helper: UPI payment option selected");
+    if (foundUPI) {
+      console.log("IRCTC Tatkal Helper: UPI payment option selected");
+    } else {
+      console.warn("IRCTC Tatkal Helper: UPI payment option not found");
+    }
   }
 
   // Wait a moment for payment option to register
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 100));
 }
 
 // Helper functions
@@ -883,7 +918,7 @@ function triggerEvent(element, eventType) {
 
 // Check if we are within the valid time window for Tatkal booking
 function checkTime(data) {
-  if (!data.tatkal_timing) return true;
+  if (!data || !data.tatkal_timing) return true;
 
   const now = new Date();
   const hours = now.getHours();
@@ -902,8 +937,9 @@ function checkTime(data) {
     "Executive Chair Car (EC)",
   ];
 
+  const journeyClass = data.class || "";
   const isAC = acClasses.some(
-    (c) => data.class.includes(c) || c.includes(data.class)
+    (c) => journeyClass.includes(c) || c.includes(journeyClass)
   );
   const targetHour = isAC ? 10 : 11;
 
@@ -1018,7 +1054,7 @@ async function reviewBooking(data) {
 async function MakePayment(data) {
   try {
     if (data.payment === "card") {
-      // Step 1: Select BHIM UPI payment option from sidebar
+      // Step 1: Select EWALLET payment option from sidebar
       const tabItems = Array.from(
         document.querySelectorAll('div[tabindex="0"]')
       );
@@ -1033,17 +1069,19 @@ async function MakePayment(data) {
       ewalletTab.click();
       console.log("IRCTC Tatkal Helper: WALLET option selected.");
 
-      // Step 2: Wait for Paytm bank option to appear and click it
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const bookNowBut = document.querySelector(".btn-primary");
+      // Step 2: Dynamically wait for Book Now button to appear and click it
+      const bookNowBut = await waitForCondition(
+        () => document.querySelector(".btn-primary"),
+        5000,
+        50
+      );
 
       if (!bookNowBut) {
         console.warn("IRCTC Tatkal Helper: Book Now button not found.");
         return;
       }
       bookNowBut.click();
-
+      console.log("IRCTC Tatkal Helper: Clicked Book Now button.");
       return;
     }
     console.log("IRCTC Tatkal Helper: Initiating payment process...");
@@ -1062,13 +1100,13 @@ async function MakePayment(data) {
     bhimTab.click();
     console.log("IRCTC Tatkal Helper: BHIM UPI option selected.");
 
-    // Step 2: Wait for Paytm bank option to appear and click it
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const bankOptions = Array.from(document.querySelectorAll(".bank-text"));
-    const paytmOption = bankOptions.find((el) =>
-      el.innerHTML.toUpperCase().includes("PAYTM")
-    );
+    // Step 2: Dynamically wait for Paytm bank option to appear and click it
+    const paytmOption = await waitForCondition(() => {
+      const bankOptions = Array.from(document.querySelectorAll(".bank-text"));
+      return bankOptions.find((el) =>
+        el.innerHTML.toUpperCase().includes("PAYTM")
+      );
+    }, 5000, 50);
 
     if (!paytmOption) {
       console.warn("IRCTC Tatkal Helper: Paytm payment option not found.");
@@ -1078,18 +1116,12 @@ async function MakePayment(data) {
     paytmOption.click();
     console.log("IRCTC Tatkal Helper: Paytm option selected.");
 
-    // Step 3: Wait for the "Pay & Book" button to appear and click it
-    let payButton = null;
-    const maxRetries = 20;
-
-    for (let i = 0; i < maxRetries; i++) {
-      payButton = Array.from(document.querySelectorAll("button")).find(
+    // Step 3: Dynamically wait for the "Pay & Book" button to appear and click it
+    const payButton = await waitForCondition(() => {
+      return Array.from(document.querySelectorAll("button")).find(
         (btn) => btn.innerText.trim().toUpperCase() === "PAY & BOOK"
       );
-
-      if (payButton) break;
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+    }, 6000, 50);
 
     if (payButton) {
       payButton.click();
