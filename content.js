@@ -92,11 +92,18 @@ async function autofillForm() {
       else if (window.location.href.includes("train-list")) {
         await selectTrain(data);
       }
-      // 3. Check if we're on the passenger details page
+      // 4. Check if we're on the passenger details page
       else if (window.location.href.includes("psgninput")) {
         await fillPassengerDetails(data);
       }
-      // 4. Check if we're on the payment page
+      // 5. Check if we're on the review booking page
+      else if (
+        window.location.href.includes("reviewBooking") ||
+        window.location.href.toLowerCase().includes("reviewbooking")
+      ) {
+        await reviewBooking(data);
+      }
+      // 6. Check if we're on the payment page
       else if (window.location.href.includes("bkgPaymentOptions")) {
         await MakePayment(data);
       } else {
@@ -932,6 +939,80 @@ function shouldAutoSubmit(data) {
 
 function shouldAutoContinue(data) {
   return checkTime(data);
+}
+
+async function reviewBooking(data) {
+  console.log("IRCTC Tatkal Helper: On review booking page, waiting for Continue button...");
+
+  try {
+    const maxRetries = 30; // Wait up to 6 seconds (30 * 200ms)
+    let continueButton = null;
+
+    for (let i = 0; i < maxRetries; i++) {
+      // 1. Check for submit button with train_Search class (IRCTC reviewBooking submit button)
+      const submitButtons = Array.from(
+        document.querySelectorAll(
+          'button.train_Search[type="submit"], button.train_Search, button[type="submit"].btnDefault, button[type="submit"]'
+        )
+      );
+
+      continueButton = submitButtons.find((btn) => {
+        const text = (btn.innerText || btn.textContent || "").trim().toLowerCase();
+        const isVisible = btn.offsetParent !== null || btn.offsetWidth > 0;
+        return (
+          (text.includes("continue") || btn.classList.contains("train_Search")) &&
+          isVisible
+        );
+      });
+
+      // 2. If not found among submit buttons, look through all buttons for "continue" text
+      if (!continueButton) {
+        const allButtons = Array.from(document.querySelectorAll("button"));
+        continueButton = allButtons.find((btn) => {
+          const text = (btn.innerText || btn.textContent || "").trim().toLowerCase();
+          const isVisible = btn.offsetParent !== null || btn.offsetWidth > 0;
+          return (text === "continue" || text.startsWith("continue")) && isVisible;
+        });
+      }
+
+      // 3. Fallback without visibility check
+      if (!continueButton) {
+        continueButton = submitButtons.find((btn) => {
+          const text = (btn.innerText || btn.textContent || "").trim().toLowerCase();
+          return text.includes("continue") || btn.classList.contains("train_Search");
+        });
+      }
+
+      if (continueButton) {
+        const isDisabled =
+          continueButton.disabled ||
+          continueButton.hasAttribute("disabled") ||
+          continueButton.classList.contains("disabled");
+        if (!isDisabled) {
+          break;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    if (continueButton) {
+      console.log(
+        "IRCTC Tatkal Helper: Continue button found on review booking page. Clicking..."
+      );
+      continueButton.focus();
+      continueButton.click();
+    } else {
+      console.warn(
+        "IRCTC Tatkal Helper: Continue button not found on review booking page"
+      );
+    }
+  } catch (error) {
+    console.error(
+      "IRCTC Tatkal Helper: Error during reviewBooking process:",
+      error
+    );
+  }
 }
 
 async function MakePayment(data) {
